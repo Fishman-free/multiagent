@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useAccount, useReadContract, useReadContracts, useWriteContract } from "wagmi";
-import { formatEther, isAddress } from "viem";
+import { useAccount, useBalance, useReadContract, useReadContracts, useWriteContract } from "wagmi";
+import { formatEther, isAddress, parseEther } from "viem";
 import { agentRegistryAbi, guaranteeEscrowAbi, schellingVotingAbi } from "@/lib/abi";
 import { mcpGuideUrl } from "@/lib/docs";
 import { CHAIN_ID, CHAIN_MODE, CONTRACT_ADDRESSES, WRITE_BLOCK_REASON, WRITES_ENABLED, activeChain, isZeroAddress } from "@/lib/config";
@@ -16,6 +16,11 @@ import { WalletPicker } from "@/app/components/wallet-picker";
 import { AmbientBackground } from "@/app/components/ambient-background";
 import { formatMessage, useLocale } from "@/lib/locale";
 import { useTxRecorder } from "@/lib/tx-history";
+
+/// Registration costs `deposit + gas`. A balance exactly equal to the deposit cannot pay the fee,
+/// and wallets only report a vague "insufficient gas" — so we reserve this buffer and tell the
+/// user exactly how much is missing.
+const REGISTRATION_GAS_BUFFER = parseEther("0.002");
 
 type AgentMetadata = readonly [
   name: string,
@@ -289,6 +294,25 @@ export default function AgentsPage() {
   const verifiedProof = isLocalMock ? mockProof.trim() : attestation?.proof;
   const verifiedInputsValid = !verifiedMode || (Boolean(verifierBound || isLocalMock) && NULLIFIER_PATTERN.test(verifiedNullifier ?? "") && Boolean(verifiedProof));
   const inputValid = Boolean(name.trim() && desc.trim() && endpoint.trim()) && !guardianError && !endpointError && verifiedInputsValid;
+
+  const { data: walletBalance } = useBalance({ address, query: { enabled: Boolean(address) } });
+  const depositDue = verifiedMode ? depositData : plainDeposit;
+  const requiredTotal = depositDue === undefined ? undefined : depositDue + REGISTRATION_GAS_BUFFER;
+  const balanceShort =
+    depositDue !== undefined && depositDue > 0n
+    && requiredTotal !== undefined && walletBalance !== undefined
+    && walletBalance.value < requiredTotal;
+  const balanceShortMessage =
+    balanceShort && requiredTotal !== undefined && depositDue !== undefined && walletBalance !== undefined
+      ? formatMessage(a.depositShort, {
+          required: formatEther(requiredTotal),
+          deposit: formatEther(depositDue),
+          buffer: formatEther(REGISTRATION_GAS_BUFFER),
+          balance: formatEther(walletBalance.value),
+          short: formatEther(requiredTotal - walletBalance.value),
+        })
+      : undefined;
+
   const busy = registration.isPending || registrationFeedback.phase === "confirming";
   const opsBusy = operations.isPending || operationsFeedback.phase === "confirming";
   const readiness = getWriteReadiness({
@@ -299,11 +323,13 @@ export default function AgentsPage() {
     authorized: true,
     stateValid: depositData !== undefined,
     inputValid,
+    sufficientFunds: !balanceShort,
     reasons: {
       "not-configured": WRITE_BLOCK_REASON,
       "wrong-chain": formatMessage(a.wrongNetwork, { chain: activeChain.name, chainId: CHAIN_ID }),
       "invalid-state": a.depositLoading,
       "invalid-input": guardianError ?? endpointError ?? (verifiedMode && !verifiedInputsValid ? a.validWorldId : a.completeInfo),
+      ...(balanceShortMessage === undefined ? {} : { "insufficient-funds": balanceShortMessage }),
     },
     locale,
   });
@@ -470,6 +496,9 @@ export default function AgentsPage() {
                 <p className="form-hint">
                   {a.depositHelp}
                 </p>
+                {balanceShortMessage !== undefined && (
+                  <p className="form-warning" role="status">{balanceShortMessage}</p>
+                )}
                 <button
                   onClick={register}
                   disabled={!readiness.ready}
