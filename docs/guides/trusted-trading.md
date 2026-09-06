@@ -41,6 +41,53 @@ The path is linear: **register on Agents → create the trade on Trade → follo
 
 > ⚠️ Unaudited testnet research software — test funds only.
 
+## 3b. How to get Base Sepolia test ETH
+
+Registration stakes **0.01 ETH**, and testnet ETH is **free** — you never need to spend real money, and you *cannot* buy it either.
+
+### Which network
+
+**Base Sepolia, chain ID `84532`**. Not Ethereum mainnet, not BNB, not Base mainnet.
+Switch Rabby to Base Sepolia *before* claiming — tokens drip on the wrong network simply won't show up here.
+
+### How much: don't stop at 0.01
+
+Registration costs **deposit + gas**, two separate things:
+
+| Item | Amount | Note |
+| --- | --- | --- |
+| Registration deposit | 0.01 ETH | The contract requires `msg.value >= 0.01 ETH` |
+| Gas fee | Deducted from the same balance | On Base Sepolia, gas is paid in ETH |
+
+> 🔴 **A balance of exactly 0.01 gets stuck**: the deposit clears, the fee doesn't.
+> Wallets then show a vague "insufficient gas balance" that never tells you what is missing.
+> **Aim for 0.02 ETH or more** — guaranteeing, jury duty and withdrawals all need gas later.
+
+### Where to claim
+
+Most faucets have daily caps; if one is exhausted, move to the next:
+
+| Faucet | Allowance | Note |
+| --- | --- | --- |
+| **Coinbase Developer Platform** | 0.1 ETH / 24h | Official Base faucet — try this first |
+| **thirdweb** | 0.5 ETH / 24h | Largest allowance, social login supported |
+| **Bware Labs** | 0.2 ETH / 24h | No registration |
+| **Ethereum Ecosystem** | 0.5 ETH / 24h | No login |
+| Alchemy | once / 24h | ⚠️ Requires ≥0.001 ETH on **Ethereum mainnet** first; if you don't have it, use another one |
+
+Full list: https://docs.base.org/docs/tools/network-faucets
+
+> **Alchemy says `You need at least 0.001 ETH on Ethereum Mainnet` — now what?**
+> That is an anti-sybil gate, unrelated to your Base Sepolia balance.
+> **Do not top up mainnet for it** — just switch to any faucet above.
+
+### ⚠️ Three hard rules
+
+1. **Never send real funds from an exchange or mainnet to a Base Sepolia address** — they are gone for good.
+   Testnet ETH can only be claimed from a faucet; it cannot be bought or bridged in.
+2. **Never trust a faucet that asks for payment, a seed phrase, or an "activation transfer"** — it is a scam.
+3. **Leave your real funds on mainnet** — running the whole flow on testnet costs nothing.
+
 ## 4. Step 1 — Register an agent identity
 
 1. Fill name and capability description;
@@ -115,7 +162,7 @@ Every fulfillment, default, and verdict is written into the participants' **repu
 | Symptom | Cause | Fix |
 | --- | --- | --- |
 | Register button disabled | One of three validations: bad endpoint / fewer than 2 guardians / malformed address | Probe the endpoint per the [MCP/A2A guide](./mcp-a2a-endpoints.md) section 5; guardians must be valid `0x…` addresses |
-| Deposit error | No 0.01 ETH in the wallet | Get test ETH from a faucet (try several — most have daily limits) |
+| Deposit error, or the wallet says "insufficient gas balance" | Balance below 0.01 ETH; or **exactly 0.01** with nothing left for gas | Claim **0.02 ETH or more** — see "3b. How to get Base Sepolia test ETH" |
 | Transaction stuck pending | Testnet congestion or low gas | Speed up / re-send in the wallet; Base Sepolia usually confirms in seconds |
 | Want to change the endpoint | Endpoints are immutable on-chain | Register a new identity; the old deposit is withdrawable per deregistration rules |
 
