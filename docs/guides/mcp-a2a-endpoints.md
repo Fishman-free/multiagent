@@ -4,6 +4,9 @@
 >
 > Three stages: **run it locally → expose it over public https → register it on AgentTrust**.
 
+> 💡 **If this feels like too much, just open Claude Code and tell it "set up a public gateway for your own MCP server" — let it configure it for you.**
+> Afterwards it's worth coming back to check the "Four don'ts" — especially, **don't let it turn off your auth**.
+
 ## 0. Hard rule — only this shape of endpoint is accepted (everything else is rejected)
 
 | Rule | How it's checked | What happens if you break it |
@@ -76,41 +79,121 @@ Registering `/health` will still pass the form (it is a valid public https URL),
 
 When you do want others to call it, hand out tokens or front it with a paid / authorization gateway. AgentTrust helps people **find** you; it does not **admit** them.
 
-### Zero-server, zero-config quickstart (try this first)
+### Public HTTPS gateway from scratch (local machine + your own domain — recommended)
 
-**Cloudflare Tunnel (cloudflared quick tunnel)** — one command, no signup, gives you a `https://*.trycloudflare.com` URL with HTTPS auto-issued. Use this to verify the handshake before deciding whether to wire up your own domain.
+> 💡 **Too much hassle? Let Claude Code do it for you.**
+> Open Claude Code and say: **"set up a public gateway for your own MCP server"**. It will handle the whole thing.
+> Afterwards, come back and check the "Four don'ts" below — especially, **do not let it turn off your auth**.
+
+First, get the traffic path straight. This is where most people go wrong:
+
+| Piece | Where it lives | Note |
+| --- | --- | --- |
+| Your MCP server | **Your own computer**, `127.0.0.1:8123` | Not on a cloud VM |
+| Tunnel process | Your own computer (cloudflared) | Dials out — no inbound port needed |
+| DNS | Aliyun / Tencent Cloud / Cloudflare, any of them | You add a single `mcp` CNAME |
+| Your existing website | The A record on your cloud VM | **Don't touch it, not one character** |
+
+So: **do not go configure Nginx for MCP on your cloud server** — MCP runs on your computer, that machine is not in the path at all.
+
+#### Step 1 · Confirm the local server is running
+
+Open `http://127.0.0.1:8123/health` in a browser. If it returns JSON, the local service is alive.
+
+#### Step 2 · Create a Cloudflare Zero Trust tunnel (use the dashboard — fewer sharp edges)
+
+1. Go to https://one.dash.cloudflare.com/ (free signup if needed);
+2. **Networks → Tunnels → Create a tunnel → Cloudflared**, name it anything, e.g. `claude-agent-mcp`;
+3. Pick **Windows** and copy the install/run command shown (essentially `cloudflared.exe service install <TOKEN>`),
+   then run it in **cmd on your machine** — installed as a service, it starts on boot;
+4. Add a **Public Hostname**:
+
+   | Field | Value |
+   | --- | --- |
+   | Subdomain | `mcp` |
+   | Domain | Your domain. If it isn't listed, pick *Add a domain from outside Cloudflare* / CNAME setup — **do not** change NS |
+   | Path | leave empty |
+   | Service type | `HTTP` |
+   | URL | `http://127.0.0.1:8123` |
+
+5. After saving, the overview shows a **CNAME target** like `<UUID>.cfargotunnel.com` — copy it.
+
+> ⚠️ **Do not click "change NS to Cloudflare"**. Your DNS still lives at Aliyun; switching breaks your existing site.
+> Use CNAME setup (partial) and only delegate the `mcp.你的域名` hostname.
+
+#### Step 3 · Add one CNAME at your DNS provider
+
+Aliyun example: Console → Cloud DNS → your domain → DNS Settings → Add Record.
+
+| Field | Value |
+| --- | --- |
+| Type | `CNAME` |
+| Host | `mcp` |
+| ISP line | default |
+| Value | `<UUID>.cfargotunnel.com` (from step 2) |
+| TTL | 10 minutes |
+
+**Do not change**: `@`, `www`, `NS`.
+
+Verify from your machine:
 
 ```bash
-# 1. Install cloudflared (macOS / Linux)
-brew install cloudflared      # macOS
+nslookup mcp.your-domain
+# should CNAME to *.cfargotunnel.com
+```
+
+#### Step 4 · Verify, then register
+
+```bash
+# 1. /health is the public status page — JSON back means the tunnel works
+curl -i https://mcp.your-domain/health
+
+# 2. /mcp is the real entry point: without a token it must return 401
+#    that is your auth working, not a misconfiguration
+curl -i -X POST https://mcp.your-domain/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
+
+# 3. Run it again with your token (add: -H "Authorization: Bearer <TOKEN>")
+#    this time you should get JSON containing serverInfo
+```
+
+What goes into the AgentTrust registration form:
+
+```
+✅ https://mcp.your-domain/mcp
+```
+
+**Never put the token on-chain.** The chain stores the address only; hand credentials privately to agents you want to reach you.
+
+#### Just testing? Skip the domain with a quick tunnel
+
+```bash
+# Install cloudflared
+winget install --id Cloudflare.cloudflared      # Windows
+brew install cloudflared                        # macOS
 # Linux: grab a binary at https://github.com/cloudflare/cloudflared/releases
 
-# 2. Assume your MCP server listens on 127.0.0.1:8123
 cloudflared tunnel --url http://127.0.0.1:8123
-# Output looks like: https://some-random-word-1234.trycloudflare.com
-# Copy that URL — that is your public endpoint.
-
-# 3. Probe — for *you* to confirm the service is alive; AgentTrust does not run it.
-#    `401 Unauthorized` without a token is expected — that means auth is working.
-#    Supply your own <TOKEN> to see `serverInfo`.
-curl -i -X POST https://some-random-word-1234.trycloudflare.com/mcp \
-   -H "Content-Type: application/json" \
-   -H "Accept: application/json, text/event-stream" \
-   -H "Authorization: Bearer <TOKEN>" \
-   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"probe","version":"0.0.1"}}}'
-
-# 4. Paste the full https URL into the registration form
-#    ✅ https://some-random-word-1234.trycloudflare.com/mcp     ← with /mcp, correct
-#    ❌ https://some-random-word-1234.trycloudflare.com         ← missing /mcp
-#    ❌ https://some-random-word-1234.trycloudflare.com/health  ← /health is only a status page
+# prints something like https://some-random-word-1234.trycloudflare.com — your temporary public endpoint
 ```
 
 > ⚠️ **Do not use this as a long-lived identity**: the quick-tunnel hostname is regenerated on every restart.
 > Once written, an on-chain endpoint **can never be changed** (`AgentInfo.endpoint` has no setter),
 > so a tunnel restart leaves your identity pointing at a dead address and you have to deregister and start over.
-> The registration form now flags temporary tunnel hosts such as `*.trycloudflare.com`, `*.ngrok.io` and `*.loca.lt`.
+> The registration form flags temporary tunnel hosts such as `*.trycloudflare.com`, `*.ngrok.io` and `*.loca.lt`.
 > When you see that warning, decide first: am I just testing the flow, or is this my long-term identity?
-> For the latter, bind your own domain.
+> For the latter, go back to step 2 and bind your own domain.
+
+#### Four don'ts (these are the ones that hurt)
+
+| ❌ Don't | Why |
+| --- | --- |
+| Disable Bearer auth so "the registration probe passes" | AgentTrust sends **zero network requests** when registering — there is no probe. Dropping auth just leaves your server naked on the internet and lets anyone burn your compute and model quota |
+| Turn on `MCP_PUBLIC_ASK=1` or similar anonymous switches | You are handing your Claude quota to the entire internet — anyone can run queries and you pay the bill |
+| Use a quick-tunnel hostname as a long-lived identity | The hostname changes on every restart, while an on-chain endpoint can never be updated |
+| Change `@`/`www`/NS, or configure Nginx for MCP on your cloud VM | MCP lives on your own computer; that A record isn't in the path. Touching it only breaks your existing site |
 
 ---
 
@@ -278,6 +361,12 @@ A JSON reply containing `serverInfo` means it works publicly. For A2A, `GET /.we
 | `/mcp` doesn't show your server in Claude Code | Not registered, or wrong scope | Re-add with `claude mcp add`; mind `--scope` (user = global / project = this repo) |
 | Claude Code reports `Transport error` | Not streamable HTTP, or proxy strips POST | Re-run the curl initialize probe from section 5 |
 | Codex can't reach the HTTP server | Older build without `url` support | Upgrade Codex, or bridge via local stdio for now |
+| `nslookup mcp.your-domain` doesn't resolve to `*.cfargotunnel.com` | CNAME missing or not propagated | Check the record value, wait out the TTL (10 min) |
+| Tunnel shows *disconnected* | The cloudflared service isn't running | Check Windows Services, or re-run `cloudflared.exe service install <TOKEN>` |
+| Claude quota draining overnight | An anonymous switch like `MCP_PUBLIC_ASK=1` is on | Turn it off; `/mcp` should require Bearer again |
+| An AI told you "the registration probe sends no token, disable auth" | False premise — registration sends **no requests at all** | Don't do it; turn your auth back on (see "Four don'ts") |
+| Others say they can't call any tool | You registered `/health` instead of `/mcp` | `/health` is only a status page — register `/mcp` |
+| Existing site broke after switching NS | Full Cloudflare onboarding without a working origin | Revert NS; use CNAME setup and delegate only the `mcp` subdomain |
 
 ---
 
