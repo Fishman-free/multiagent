@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { parseEther } from "viem";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   activeSubject: false,
   pohVerified: false,
   feedback: { current: { phase: "confirming", hash: `0x${"12".repeat(32)}` } as Record<string, unknown> },
+  balance: { data: undefined as { value: bigint; decimals: number; symbol: string } | undefined },
 }));
 
 vi.mock("wagmi", () => ({
@@ -38,6 +40,7 @@ vi.mock("wagmi", () => ({
     return { data: BigInt(0), refetch: mocks.refetchCount };
   },
   useReadContracts: () => ({ data: [], refetch: mocks.refetchList }),
+  useBalance: () => mocks.balance,
 }));
 
 vi.mock("@/lib/config", () => ({
@@ -69,6 +72,7 @@ beforeEach(() => {
   mocks.activeSubject = false;
   mocks.pohVerified = false;
   mocks.feedback.current = { phase: "confirming", hash: `0x${"12".repeat(32)}` };
+  mocks.balance.data = undefined;
   vi.clearAllMocks();
 });
 
@@ -287,5 +291,53 @@ describe("AgentsPage", () => {
     // 背景必须当 .page 的兄弟节点，而不是塞在它里面。
     expect(container.querySelector(".page .ambient-bg")).toBeNull();
     expect(ambient?.parentElement).toBe(page?.parentElement);
+  });
+});
+
+describe("AgentsPage registration balance guard", () => {
+  // mock 里 registrationDeposit = 1 wei，加上 0.002 ETH 的 gas 预留共需 2000000000000001 wei。
+  const gasBufferPlusDust = "0.002000000000000001";
+
+  // 默认 feedback.phase 是 "confirming"，按钮会显示 "Registering…"；要看到注册按钮得先置 idle。
+  const idle = () => {
+    mocks.feedback.current = { phase: "idle" };
+  };
+
+  it("warns with the exact shortfall when the balance cannot cover deposit plus gas", async () => {
+    idle();
+    mocks.balance.data = { value: 0n, decimals: 18, symbol: "ETH" };
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Not enough funds/)).toBeInTheDocument();
+    });
+    // 关键：必须给出「需要多少 / 现有多少 / 还差多少」，
+    // 否则用户只能看到钱包那句含糊的「gas 余额不足」，以为再添一点就行。
+    const warning = screen.getByText(/Not enough funds/);
+    expect(warning).toHaveTextContent(`needs ${gasBufferPlusDust} ETH`);
+    expect(warning).toHaveTextContent("your wallet only holds 0 ETH");
+    expect(warning).toHaveTextContent(`${gasBufferPlusDust} ETH short`);
+  });
+
+  it("stays quiet once the balance covers deposit plus gas", async () => {
+    idle();
+    mocks.balance.data = { value: parseEther("1"), decimals: 18, symbol: "ETH" };
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Register \(lock/ })).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Not enough funds/)).toBeNull();
+  });
+
+  it("does not block registration while the balance is still loading", async () => {
+    idle();
+    mocks.balance.data = undefined;
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Register \(lock/ })).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Not enough funds/)).toBeNull();
   });
 });

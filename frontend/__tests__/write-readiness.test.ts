@@ -25,6 +25,7 @@ describe("write readiness", () => {
     ["authorized", false, "unauthorized"],
     ["stateValid", false, "invalid-state"],
     ["inputValid", false, "invalid-input"],
+    ["sufficientFunds", false, "insufficient-funds"],
   ] as const)("blocks on %s", (field, value, code) => {
     expect(getWriteReadiness({ ...ready, [field]: value })).toMatchObject({ ready: false, code });
   });
@@ -36,5 +37,11 @@ describe("write readiness", () => {
       code: "unauthorized",
       reason: "仅买方可操作",
     });
+  });
+
+  it("treats the funds check as opt-in so existing callers are unaffected", () => {
+    expect(isWriteReady(ready)).toBe(true);
+    expect(isWriteReady({ ...ready, sufficientFunds: true })).toBe(true);
+    expect(getWriteReadiness({ ...ready, sufficientFunds: false })).toMatchObject({ ready: false, code: "insufficient-funds" });
   });
 });
