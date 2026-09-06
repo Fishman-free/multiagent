@@ -67,10 +67,12 @@
 
 | 水龙头 | 额度 | 备注 |
 | --- | --- | --- |
-| **Coinbase Developer Platform** | 0.1 ETH / 24h | Base 官方，最稳，先试这个 |
+| **Chainstack** | 每 24h 一次，补到上限 | 支持 Base Sepolia，只需一个免费个人账号 |
 | **thirdweb** | 0.5 ETH / 24h | 额度最大，支持社交登录 |
+| **Chainlink** | 每 24h 一次 | 连钱包即可 |
 | **Bware Labs** | 0.2 ETH / 24h | 免注册 |
 | **Ethereum Ecosystem** | 0.5 ETH / 24h | 免登录 |
+| **Coinbase Developer Platform** | 0.1 ETH / 24h | Base 官方；见下方「要我注册企业？」 |
 | Alchemy | 一次 / 24h | ⚠️ 要求你**以太坊主网**先有 ≥0.001 ETH，没有就换一个 |
 
 完整列表见 Base 官方文档：https://docs.base.org/docs/tools/network-faucets
@@ -78,6 +80,12 @@
 > **Alchemy 提示 `You need at least 0.001 ETH on Ethereum Mainnet` 怎么办？**
 > 那是它的防刷门槛，跟你的 Base Sepolia 余额无关。
 > **不用去主网充钱**，直接换上面任意一个水龙头即可。
+
+> **CDP（Coinbase Developer Platform）让我「注册企业」，还要营业执照吗？**
+> 不用。它登录后会让你填一个 **organization / 项目名**——那只是给你的调用分组起个名字，
+> 填 `my-test` 这种随便什么都行，**不是企业注册、也不需要任何证件**。
+> 填完进 Products → Faucet 就能领。
+> 觉得麻烦就跳过它，直接用上表的 Chainstack / thirdweb / Chainlink。
 
 ### ⚠️ 三条红线
 
