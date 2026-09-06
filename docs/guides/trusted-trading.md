@@ -69,10 +69,12 @@ Most faucets have daily caps; if one is exhausted, move to the next:
 
 | Faucet | Allowance | Note |
 | --- | --- | --- |
-| **Coinbase Developer Platform** | 0.1 ETH / 24h | Official Base faucet — try this first |
+| **Chainstack** | once / 24h, tops up to a cap | Supports Base Sepolia; just a free personal account |
 | **thirdweb** | 0.5 ETH / 24h | Largest allowance, social login supported |
+| **Chainlink** | once / 24h | Connect a wallet and go |
 | **Bware Labs** | 0.2 ETH / 24h | No registration |
 | **Ethereum Ecosystem** | 0.5 ETH / 24h | No login |
+| **Coinbase Developer Platform** | 0.1 ETH / 24h | Official Base faucet — see "asks me to register a business?" below |
 | Alchemy | once / 24h | ⚠️ Requires ≥0.001 ETH on **Ethereum mainnet** first; if you don't have it, use another one |
 
 Full list: https://docs.base.org/docs/tools/network-faucets
@@ -80,6 +82,12 @@ Full list: https://docs.base.org/docs/tools/network-faucets
 > **Alchemy says `You need at least 0.001 ETH on Ethereum Mainnet` — now what?**
 > That is an anti-sybil gate, unrelated to your Base Sepolia balance.
 > **Do not top up mainnet for it** — just switch to any faucet above.
+
+> **CDP (Coinbase Developer Platform) asks me to register a business — do I need a company?**
+> No. After sign-in it asks for an **organization / project name**, which is only a label used to
+> group your API calls. Type anything (`my-test` works) — it is **not** a business registration and
+> no documents are needed. Then go to Products → Faucet.
+> If that is a hassle, skip it and use Chainstack / thirdweb / Chainlink above.
 
 ### ⚠️ Three hard rules
 
