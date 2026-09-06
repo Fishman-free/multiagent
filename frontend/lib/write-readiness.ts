@@ -1,6 +1,6 @@
 import { dictionaries, type Locale } from "./locale";
 
-export type WriteBlockCode = "not-configured" | "not-connected" | "wrong-chain" | "busy" | "unauthorized" | "invalid-state" | "invalid-input";
+export type WriteBlockCode = "not-configured" | "not-connected" | "wrong-chain" | "busy" | "unauthorized" | "invalid-state" | "invalid-input" | "insufficient-funds";
 
 export type WriteReadinessInput = {
   configured: boolean;
@@ -10,6 +10,8 @@ export type WriteReadinessInput = {
   authorized: boolean;
   stateValid: boolean;
   inputValid: boolean;
+  /** Optional. When explicitly `false`, blocks the write with `insufficient-funds`. Omit to skip the check. */
+  sufficientFunds?: boolean;
   reasons?: Partial<Record<WriteBlockCode, string>>;
   locale?: Locale;
 };
@@ -20,7 +22,7 @@ export type WriteReadiness =
 
 function defaultReasons(locale: Locale): Record<WriteBlockCode, string> {
   const t = dictionaries[locale].write;
-  return { "not-configured": t.notConfigured, "not-connected": t.notConnected, "wrong-chain": t.wrongChain, busy: t.busy, unauthorized: t.unauthorized, "invalid-state": t.invalidState, "invalid-input": t.invalidInput };
+  return { "not-configured": t.notConfigured, "not-connected": t.notConnected, "wrong-chain": t.wrongChain, busy: t.busy, unauthorized: t.unauthorized, "invalid-state": t.invalidState, "invalid-input": t.invalidInput, "insufficient-funds": t.insufficientFunds };
 }
 
 /** Pure, ordered write guard. Earlier infrastructure failures take precedence over form errors. */
@@ -44,5 +46,6 @@ function firstBlockCode(input: WriteReadinessInput): WriteBlockCode | null {
   if (!input.authorized) return "unauthorized";
   if (!input.stateValid) return "invalid-state";
   if (!input.inputValid) return "invalid-input";
+  if (input.sufficientFunds === false) return "insufficient-funds";
   return null;
 }
